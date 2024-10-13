@@ -19,9 +19,24 @@ if (!$targetUrl) {
 
 $ch = curl_init($targetUrl);
 
+$responseHeaders = [];
+
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+curl_setopt($ch, CURLOPT_HEADER, false);
+
+curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $header) use (&$responseHeaders) {
+	$len = strlen($header);
+	$header = explode(':', $header, 2);
+	if (count($header) < 2) {
+		return $len;
+	}
+
+	$responseHeaders[trim($header[0])] = trim($header[1]);
+
+	return $len;
+});
 
 $method = $_SERVER['REQUEST_METHOD'];
 $content = file_get_contents('php://input') ?? "";
@@ -58,9 +73,15 @@ if (curl_errno($ch)) {
 }
 
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
 
 curl_close($ch);
 
 http_response_code($httpCode);
+foreach ($responseHeaders as $key => $value) {
+	if (strcasecmp($key, 'Transfer-Encoding') !== 0 && strcasecmp($key, 'Content-Length') !== 0) {
+		header("$key: $value");
+	}
+}
 
 echo $response;
